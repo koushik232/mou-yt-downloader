@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>YouTube Downloader</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .box {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      max-width: 400px;
+      width: 100%;
+    }
+    input, select, button {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+      font-size: 16px;
+      box-sizing:border-box
+    }
+    button {
+      background: #e62117;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #c91010;
+    }
+    .preview {
+      margin-top: 10px;
+      text-align: center;
+      display: none;
+    }
+    .preview img {
+      max-width: 100%;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .preview h4 {
+      margin: 0;
+      font-size: 16px;
+    }
+    progress {
+      width: 100%;
+      margin-top: 10px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>YT Downloader</h2>
+    <form id="dlForm">
+      <input type="text" id="url" name="url" placeholder="Enter YouTube URL" required />
+      <select id="type" name="type">
+        <option value="video">Video</option>
+        <option value="audio">Audio (MP3)</option>
+      </select>
+      <button type="submit">Download</button>
+    </form>
+
+    <progress id="bar" value="0" max="100"></progress>
+
+    <div class="preview" id="preview">
+      <img id="thumbnail" src="" alt="Thumbnail" />
+      <h4 id="title"></h4>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('dlForm');
+    const urlInput = document.getElementById('url');
+    const preview = document.getElementById('preview');
+    const thumb = document.getElementById('thumbnail');
+    const title = document.getElementById('title');
+    const btn = form.querySelector('button');
+    const bar = document.getElementById('bar');
+
+    urlInput.addEventListener('input', async () => {
+      const url = urlInput.value.trim();
+      if (!url.startsWith('http')) {
+        preview.style.display = 'none';
+        return;
+      }
+      try {
+        const res = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(url)}`);
+        const data = await res.json();
+        if (data.thumbnail_url) {
+          thumb.src = data.thumbnail_url;
+          title.textContent = data.title || 'Preview';
+          preview.style.display = 'block';
+        } else {
+          preview.style.display = 'none';
+        }
+      } catch (err) {
+        preview.style.display = 'none';
+      }
+    });
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      btn.disabled = true;
+      btn.textContent = 'Downloading…';
+      bar.value = 0;
+      bar.style.display = 'block';
+
+      try {
+        const res = await fetch('/download', {
+          method: 'POST',
+          body: new URLSearchParams(new FormData(form))
+        });
+
+        const disposition = res.headers.get('content-disposition') || '';
+        const match = disposition.match(/filename="(.+)"/);
+        const filename = match ? match[1] : 'download';
+
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+      } catch (err) {
+        alert('Download failed');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Download';
+        setTimeout(() => { bar.style.display = 'none'; bar.value = 0; }, 1500);
+      }
+    });
+
+    // EventSource for progress
+    const evtSource = new EventSource('/progress');
+    evtSource.onmessage = (e) => {
+      if (e.data === 'done') {
+        bar.value = 100;
+      } else if (e.data.includes('%')) {
+        const val = parseFloat(e.data.replace('%', '').trim());
+        bar.value = val;
+      }
+    };
+  </script>
+</body>
+</html>
