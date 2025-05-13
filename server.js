@@ -5,6 +5,15 @@ const contentDisposition = require('content-disposition');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+let ffmpegPath;
+try {
+  ffmpegPath = require('ffmpeg-static');
+  process.env.FFMPEG_PATH = ffmpegPath;
+  console.log('Using ffmpeg-static');
+} catch (e) {
+  console.warn('ffmpeg-static not available. Using system ffmpeg if available.');
+}
+
 let currentProgress = 'starting';
 
 app.use(express.urlencoded({ extended: true }));
@@ -27,33 +36,36 @@ app.post('/download', async (req, res) => {
   const { url, type } = req.body;
   if (!url) return res.status(400).send('No URL provided');
 
-  const proxyUrl = `https://yt-downkoader.pages.dev/?url=${encodeURIComponent(url)}`;
   let filename = 'video.mp4';
+  const format = type === 'audio' ? 'bestaudio' : 'best';
 
   try {
-    // Get the filename using youtube-dl-exec
-    const meta = await ytdlp(proxyUrl, {
+    const meta = await ytdlp(url, {
       dumpSingleJson: true
     });
-    if (meta && meta.title && meta.ext) {
-      filename = sanitize(`${meta.title}.${type === 'audio' ? 'mp3' : meta.ext}`);
+    if (meta && meta.title) {
+      const ext = type === 'audio' ? 'mp3' : (meta.ext || 'mp4');
+      filename = sanitize(`${meta.title}.${ext}`);
     }
   } catch (err) {
     console.error('Error fetching metadata:', err);
   }
 
-  const format = type === 'audio' ? 'bestaudio' : 'best';
-
-  // Start download process
-  const proc = ytdlp.raw(proxyUrl, {
-    format,
-    output: '-',
-    'progress-template': 'downloaded:%(progress._percent_str)s',
-  });
-
   res.setHeader('Content-Disposition', contentDisposition(filename));
   res.setHeader('Content-Type', 'application/octet-stream');
   res.flushHeaders();
+
+  const proc = ytdlp.raw(url, {
+    format,
+    output: '-',
+    ...(ffmpegPath && { ffmpegLocation: ffmpegPath }),
+    ...(type === 'audio' && {
+      extractAudio: true,
+      audioFormat: 'mp3',
+      audioQuality: '0'
+    }),
+    'progress-template': 'downloaded:%(progress._percent_str)s'
+  });
 
   proc.stdout.pipe(res);
 

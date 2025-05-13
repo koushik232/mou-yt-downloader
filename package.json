@@ -1,21 +1,31 @@
 {
-  "name": "mou-yt-downloader",
+  "name": "yt-downloader",
   "version": "1.0.0",
-  "description": "YouTube video/audio downloader using yt-dlp",
+  "description": "A simple YouTube video/audio downloader using yt-dlp and Express",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "youtube-dl-exec": "^3.0.19",
+    "content-disposition": "^0.5.4",
+    "express": "^4.18.4",
     "sanitize-filename": "^1.6.3",
-    "content-disposition": "^0.5.4"
+    "youtube-dl-exec": "^2.0.1"
+  },
+  "optionalDependencies": {
+    "ffmpeg-static": "^5.2.0"
   },
   "engines": {
-    "node": ">=16"
+    "node": ">=16.0.0"
   },
-  "keywords": [],
-  "author": "koushik232",
+  "keywords": [
+    "youtube",
+    "downloader",
+    "mp3",
+    "video",
+    "yt-dlp",
+    "express"
+  ],
+  "author": "Your Name",
   "license": "MIT"
 }
