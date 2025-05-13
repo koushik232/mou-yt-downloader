@@ -1,5 +1,5 @@
 const express = require('express');
-const ytdlp = require('yt-dlp-exec');
+const ytdlp = require('youtube-dl-exec');
 const sanitize = require('sanitize-filename');
 const contentDisposition = require('content-disposition');
 const app = express();
@@ -27,54 +27,54 @@ app.post('/download', async (req, res) => {
   const { url, type } = req.body;
   if (!url) return res.status(400).send('No URL provided');
 
-  // Prepare the proxy URL for yt-dlp to fetch from.
   const proxyUrl = `https://yt-downkoader.pages.dev/?url=${encodeURIComponent(url)}`;
   let filename = 'video.mp4';
 
-  // Fetch the filename using yt-dlp-exec.
   try {
+    // Get the filename using youtube-dl-exec
     const meta = await ytdlp(proxyUrl, {
-      getFilename: true,
-      output: '%(title)s.%(ext)s'
+      dumpSingleJson: true
     });
-    filename = sanitize(meta.trim());
+    if (meta && meta.title && meta.ext) {
+      filename = sanitize(`${meta.title}.${type === 'audio' ? 'mp3' : meta.ext}`);
+    }
   } catch (err) {
-    console.error('Filename fetch error:', err);
+    console.error('Error fetching metadata:', err);
   }
 
-  // Build arguments for the download process.
-  const args = [
-    '-o', '-',            // Output to stdout.
-    proxyUrl,
-    '-f', type === 'audio' ? 'bestaudio' : 'best',
-    '--progress-template', 'downloaded:%(progress._percent_str)s'
-  ];
+  const format = type === 'audio' ? 'bestaudio' : 'best';
 
-  try {
-    // Start the download process.
-    const proc = ytdlp.raw(args);
+  // Start download process
+  const proc = ytdlp.raw(proxyUrl, {
+    format,
+    output: '-',
+    'progress-template': 'downloaded:%(progress._percent_str)s',
+  });
 
-    res.setHeader('Content-Disposition', contentDisposition(filename));
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.flushHeaders();
+  res.setHeader('Content-Disposition', contentDisposition(filename));
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.flushHeaders();
 
-    proc.stdout.pipe(res);
+  proc.stdout.pipe(res);
 
-    proc.stderr.on('data', chunk => {
-      const line = chunk.toString();
-      const match = line.match(/downloaded:([0-9.]+%)/);
-      if (match) {
-        currentProgress = match[1];
-      }
-    });
+  proc.stderr.on('data', chunk => {
+    const line = chunk.toString();
+    const match = line.match(/downloaded:([0-9.]+%)/);
+    if (match) {
+      currentProgress = match[1];
+    }
+  });
 
-    proc.on('close', () => {
-      currentProgress = 'done';
-    });
-  } catch (err) {
-    console.error('Download process error:', err);
-    res.status(500).send('Download failed');
-  }
+  proc.on('close', () => {
+    currentProgress = 'done';
+  });
+
+  proc.on('error', (err) => {
+    console.error('Download error:', err);
+    res.status(500).send('Download failed.');
+  });
 });
 
-app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server listening on port ${PORT}`);
+});
